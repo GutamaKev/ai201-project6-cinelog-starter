@@ -41,10 +41,12 @@ reproduced that exact shape with `WatchlistEntry` and `AlreadyInWatchlistError`.
 `test_add_to_collection_duplicate_raises` documents the expected behavior
 (second add raises; only one row persists). Full suite green.
 
-_Open item:_ the watchlist **route** has no `try/except`, so a duplicate add
-currently propagates uncaught and returns HTTP 500 instead of the 409 the
-collection route returns. Left out of this milestone's scope — flagged for a
-follow-up.
+_Follow-up (resolved):_ the deduplication above is enforced in the service, but
+the watchlist **route** originally had no `try/except`, so a duplicate add
+propagated uncaught and returned HTTP 500 instead of a 409. I later added the
+`try/except` to the add endpoint so it now returns **409** for
+`AlreadyInWatchlistError` and **404** for `FilmNotFoundError`, matching the
+collection route (`fix: return 404/409 from watchlist add route instead of 500`).
 
 ## Comment 3 — Missing test
 **What I did:** Created `tests/test_watchlist.py` with
@@ -257,12 +259,11 @@ first seed one user and two films, then exercise the endpoints.
    ```
    Expect both films **newest-first** — `Dune` (added last) before `Arrival`
    (sort decision) — each with `"public": true`.
-6. **Verify deduplication:** re-run the Arrival add from step 4, then re-fetch
-   the watchlist. The film still appears **only once** — the service rejects the
-   duplicate before inserting. (Known follow-up: the route does not yet translate
-   `AlreadyInWatchlistError`/`FilmNotFoundError` into `409`/`404`, so a duplicate
-   or unknown `film_id` currently surfaces as a `500`; the collection route,
-   which this mirrors, already does the translation.)
+6. **Verify deduplication and error handling:** re-run the Arrival add from
+   step 4 — it returns **`409`** (`AlreadyInWatchlistError`), and re-fetching the
+   watchlist shows the film still appears **only once**. Adding an unknown
+   `film_id` returns **`404`** (`FilmNotFoundError`), and a request with no
+   `film_id` returns **`400`** — matching the collection route.
 7. **(Optional) Run the automated tests:**
    ```bash
    pytest tests/ -v
