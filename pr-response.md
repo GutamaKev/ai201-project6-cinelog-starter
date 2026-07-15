@@ -1,24 +1,46 @@
 # PR Response Doc — CineLog Watchlist Feature
 
 ## AI Usage
-<!-- Fill in at the end — how you used AI tools during this project -->
-- **Comments 4 & 5 (devil's advocate):** After drafting my positions I asked AI
-  what counterargument a careful reviewer would raise and which tradeoff I wasn't
-  acknowledging. For Comment 4 it pushed the privacy-by-design / data-minimization
-  angle (most-protective default is the correct one) harder than my draft had —
-  I revised the "Tradeoff acknowledged" paragraph to concede that directly and to
-  condition my position on disclosure + the per-entry toggle, rather than just
-  asserting the social benefit. For Comment 5 it raised that recency-of-*add* is a
-  weak proxy for what you actually want to watch (watchlists are things you delay);
-  I already leaned toward configurable sort, so I folded that objection in
-  explicitly as the long-list failure mode and named user-selectable sort as the
-  real fix. The arguments and final wording are my own.
+I used AI as an assistant throughout, and verified everything it produced against
+the actual code, the test results, and the Conventional Commits spec before
+committing. Specific uses:
+
+- **Codebase orientation / understanding a pattern (Comments 1–3).** Before
+  writing the deduplication, I had AI walk me through `add_to_collection()` in
+  `collection_service.py` — specifically what its duplicate check does and that
+  it *raises* `AlreadyInCollectionError` *before* `db.session.add`/`commit`
+  (rather than returning). I confirmed that against the source, then wrote the
+  parallel guard in `add_to_watchlist()` myself. I used the same approach to
+  understand the fixture structure in `test_collection.py` before writing
+  `test_watchlist.py`.
+
+- **Stress-testing my design arguments (Comments 4 & 5).** After drafting my
+  positions I asked AI what counterargument a careful reviewer would raise and
+  which tradeoff I wasn't acknowledging. For Comment 4 it pushed the
+  privacy-by-design / data-minimization angle (the most-protective default is the
+  correct one) harder than my draft had — I revised the "Tradeoff acknowledged"
+  paragraph to concede that directly and to condition my position on disclosure +
+  the per-entry toggle, rather than just asserting the social benefit. For
+  Comment 5 it raised that recency-of-*add* is a weak proxy for what you actually
+  want to watch (watchlists are things you delay); I already leaned toward
+  configurable sort, so I folded that objection in explicitly as the long-list
+  failure mode and named user-selectable sort as the real fix. The arguments and
+  final wording are my own.
+
+- **Verifying commit format.** Before finalizing history I gave AI my
+  `git log --oneline` and asked whether the messages follow Conventional Commits
+  and whether any bundled more than one logical change. It flagged the
+  rebase-resolution commit as the one combining several edits; I checked it
+  against the spec myself and kept it as one deliberate atomic commit (every part
+  serves the single goal of reconciling the feature with the UUID rebase), and I
+  reclassified the rename from `refactor:` to `fix:` to fit the project's allowed
+  type set (`feat`/`fix`/`test`/`docs`).
 
 ## Comment 1 — Rename
 **What I did:** Renamed `save_to_watchlist()` to `add_to_watchlist()` in
 `services/watchlist_service.py` and updated its one call site — the import and
 the call in `routes/watchlist/watchlist.py`. Committed on its own
-(`refactor: rename save_to_watchlist to add_to_watchlist`).
+(`fix: rename save_to_watchlist to add_to_watchlist per naming convention`).
 
 **How I verified:** To find every call site I ran a project-wide search
 (`grep -rn "save_to_watchlist" --include="*.py" .`) before editing — it returned
@@ -31,7 +53,8 @@ missed. Full suite green (`pytest tests/ -v`, 5 passed).
 `add_to_collection()`. Before inserting, it queries for an existing
 `WatchlistEntry` with the same `user_id`/`film_id`; if one exists it raises a new
 `AlreadyInWatchlistError` instead of creating a duplicate row. Committed
-separately from the rename (`feat: deduplicate watchlist adds`).
+separately from the rename
+(`fix: add deduplication check to prevent duplicate watchlist entries`).
 
 **How I verified:** I read `add_to_collection()` to understand the pattern: it
 does `CollectionEntry.query.filter_by(user_id=..., film_id=...).first()` and,
@@ -159,16 +182,17 @@ disappeared with no conflict to flag.
    this, so `get_watchlist` was latently broken; since it had no test, nothing
    caught it.
 4. Updated the nonexistent-film test to use a UUID id instead of the old integer.
-   Committed as `fix: restore WatchlistEntry dropped by rebase onto UUID
-   refactor`.
 5. Swept the remaining watchlist code for lingering integer-ID references: the
    service docstring described `film_id (int)` and the route's example body
    showed `{ "film_id": <int> }`. Updated both to the UUID form (`str` /
-   `"<uuid>"`), matching the collection service. Committed as
-   `docs: update watchlist film_id references from int to UUID`.
+   `"<uuid>"`), matching the collection service.
+
+Steps 2–5 are all part of the rebase resolution and, after I cleaned up the
+branch history, live in a single commit:
+`fix: rebase onto main — restore WatchlistEntry as UUID`.
 
 **How I verified no conflict remains:**
-- `git status` is clean (only the untracked `pr-response.md` remains).
+- `git status` is clean.
 - `git log --merges origin/main..HEAD` returns nothing, and
   `git log --oneline origin/main..HEAD` shows a linear history of my commits on
   top of `origin/main` — **no merge commits** remain, confirming a true rebase
