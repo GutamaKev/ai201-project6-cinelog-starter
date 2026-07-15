@@ -54,8 +54,8 @@ def test_add_to_watchlist_nonexistent_film_raises(app, sample_user):
     FilmNotFoundError, not a database integrity error.
     """
     with app.app_context():
-        # Film.id is an integer on this branch, so an id no row uses is nonexistent.
-        fake_film_id = 999999
+        # Film.id is a UUID string post-refactor; this one matches no row.
+        fake_film_id = "00000000-0000-0000-0000-000000000000"
 
         with pytest.raises(FilmNotFoundError):
             add_to_watchlist(user_id=sample_user, film_id=fake_film_id)
